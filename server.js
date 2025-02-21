@@ -1,104 +1,85 @@
 const express = require('express');
-const bodyParser = require('body-parser');
-const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
-const port = process.env.PORT || 3000;
+app.use(express.json()); // Для обработки JSON-запросов
 
-// Настройка CORS
-app.use(cors({
-    origin: ['https://ilyshka3346.github.io', 'http://localhost', 'https://card-eta-ten.vercel.app'],
-    methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true
-}));
+const supabase = createClient(
+    'https://zkhnijcxqhuljvufgrqa.supabase.co', // Замени на свой URL Supabase
+    'your-anon-key' // Замени на свой анонимный ключ
+);
 
-// Обработка предварительных запросов (OPTIONS)
-app.options('*', cors());
+// Генерация 16-значного кода
+function generateCode() {
+    return Math.random().toString().slice(2, 18);
+}
 
-// Настройка Supabase
-const supabaseUrl = 'https://card-eta-ten.vercel.app/api/cards'; // Замените на ваш URL
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpraG5pamN4cWh1bGp2dWZncnFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAxMzk0ODYsImV4cCI6MjA1NTcxNTQ4Nn0.CcT8Ok51EpfyWJngtlQgkQQvtmZnN7uLyRW1NGegS6w'; // Замените на ваш ключ
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Маршрут для генерации карты
+app.get('/generate-card', async (req, res) => {
+    const code = generateCode();
 
-// Middleware
-app.use(bodyParser.json());
+    // Создаем карту с начальным балансом 0 GOM
+    const { data, error } = await supabase
+        .from('cards')
+        .insert([{ code, balance: 0 }]);
 
-// Генерация номера карты
-const generateCardCode = () => {
-    let code = '';
-    for (let i = 0; i < 16; i++) {
-        code += Math.floor(Math.random() * 10);
+    if (error) {
+        return res.status(500).json({ error: 'Ошибка при создании карты' });
     }
-    return code.match(/.{1,4}/g).join(' ');
-};
 
-// Корневой маршрут /api/cards
-app.get('/api/cards', (req, res) => {
-    res.json({ message: 'Добро пожаловать в API банковских карт!' });
+    res.json({ code });
 });
 
-// Создание новой карты
-app.post('/api/cards/create', async (req, res) => {
-    try {
-        const cardCode = generateCardCode();
-        const newCard = {
-            code: cardCode,
-            balance: 0,
-            history: []
-        };
+// Маршрут для перевода средств
+app.post('/transfer', async (req, res) => {
+    const { fromCode, toCode, amount } = req.body;
 
-        const { data, error } = await supabase
-            .from('cards')
-            .insert([newCard]);
+    // Проверяем, достаточно ли средств на карте отправителя
+    const { data: fromCard, error: fromError } = await supabase
+        .from('cards')
+        .select('balance')
+        .eq('code', fromCode)
+        .single();
 
-        if (error) throw error;
-
-        res.json(newCard);
-    } catch (error) {
-        console.error('Ошибка при создании карты:', error);
-        res.status(500).json({ error: 'Ошибка сервера' });
+    if (fromError || !fromCard) {
+        return res.status(400).json({ error: 'Карта отправителя не найдена' });
     }
-});
 
-// Получение данных карты
-app.get('/api/cards/:cardCode', async (req, res) => {
-    try {
-        const cardCode = req.params.cardCode;
-
-        const { data: card, error } = await supabase
-            .from('cards')
-            .select('*')
-            .eq('code', cardCode)
-            .single();
-
-        if (error || !card) {
-            return res.status(404).json({ error: 'Карта не найдена' });
-        }
-
-        res.json(card);
-    } catch (error) {
-        console.error('Ошибка при получении данных карты:', error);
-        res.status(500).json({ error: 'Ошибка сервера' });
+    if (fromCard.balance < amount) {
+        return res.status(400).json({ error: 'Недостаточно средств' });
     }
-});
 
-// Обработка 404
-app.use((req, res) => {
-    res.status(404).json({ error: 'Маршрут не найден' });
-});
+    // Проверяем, существует ли карта получателя
+    const { data: toCard, error: toError } = await supabase
+        .from('cards')
+        .select('balance')
+        .eq('code', toCode)
+        .single();
 
-// Обработка ошибок
-app.use((err, req, res, next) => {
-    console.error('Ошибка сервера:', err);
-    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+    if (toError || !toCard) {
+        return res.status(400).json({ error: 'Карта получателя не найдена' });
+    }
+
+    // Выполняем перевод
+    const { error: updateFromError } = await supabase
+        .from('cards')
+        .update({ balance: fromCard.balance - amount })
+        .eq('code', fromCode);
+
+    const { error: updateToError } = await supabase
+        .from('cards')
+        .update({ balance: toCard.balance + amount })
+        .eq('code', toCode);
+
+    if (updateFromError || updateToError) {
+        return res.status(500).json({ error: 'Ошибка при переводе средств' });
+    }
+
+    res.json({ success: true });
 });
 
 // Запуск сервера
-app.listen(port, () => {
-    console.log(`Сервер запущен на http://localhost:${port}`);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Сервер запущен на порту ${PORT}`);
 });
-
-// Экспорт для Vercel
-module.exports = app;
