@@ -6,7 +6,7 @@ app.use(express.json()); // Для обработки JSON-запросов
 
 const supabase = createClient(
     'https://zkhnijcxqhuljvufgrqa.supabase.co', // Замени на свой URL Supabase
-    'your-anon-key' // Замени на свой анонимный ключ
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpraG5pamN4cWh1bGp2dWZncnFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAxMzk0ODYsImV4cCI6MjA1NTcxNTQ4Nn0.CcT8Ok51EpfyWJngtlQgkQQvtmZnN7uLyRW1NGegS6w' // Замени на свой анонимный ключ
 );
 
 // Генерация 16-значного кода

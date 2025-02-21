@@ -67,7 +67,7 @@
         // Получить карту
         document.getElementById('getCardButton').addEventListener('click', async () => {
             try {
-                const response = await fetch('https://card-back-zeta.vercel.app/generate-card');
+                const response = await fetch('https://card-back-ilays-projects-a2759a07.vercel.app/generate-card');
                 const data = await response.json();
 
                 currentCardCode = data.code;
