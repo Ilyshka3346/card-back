@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Карта GOM</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        button {
+            background-color: #8a2be2; /* Фиолетовый цвет */
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 18px;
+            cursor: pointer;
+            border-radius: 5px;
+            margin: 10px;
+        }
+        button:hover {
+            background-color: #7b1fa2; /* Темнее фиолетовый */
+        }
+        .card {
+            background-color: #4caf50; /* Зеленый цвет */
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            font-size: 18px;
+            display: none; /* Скрываем карту по умолчанию */
+        }
+        input {
+            padding: 10px;
+            font-size: 16px;
+            margin: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+<body>
+    <div id="mainPage">
+        <button id="getCardButton">Получить карту</button>
+    </div>
+
+    <div id="cardPage" class="card">
+        <h1>Ваша карта GOM</h1>
+        <p>Код карты: <strong id="cardCode"></strong></p>
+        <p>Баланс: <strong id="cardBalance">0</strong> GOM</p>
+        <div>
+            <input type="text" id="toCode" placeholder="Код карты получателя">
+            <input type="number" id="amount" placeholder="Сумма">
+            <button id="transferButton">Перевести</button>
+        </div>
+    </div>
+
+    <script>
+        let currentCardCode = '';
+
+        // Получить карту
+        document.getElementById('getCardButton').addEventListener('click', async () => {
+            try {
+                const response = await fetch('https://card-back-zeta.vercel.app/generate-card');
+                const data = await response.json();
+
+                currentCardCode = data.code;
+
+                // Показываем карту и скрываем главную страницу
+                document.getElementById('mainPage').style.display = 'none';
+                document.getElementById('cardPage').style.display = 'block';
+
+                // Отображаем код карты
+                document.getElementById('cardCode').textContent = data.code;
+            } catch (error) {
+                console.error('Ошибка:', error);
+            }
+        });
+
+        // Перевод средств
+        document.getElementById('transferButton').addEventListener('click', async () => {
+            const toCode = document.getElementById('toCode').value;
+            const amount = parseFloat(document.getElementById('amount').value);
+
+            if (!toCode || !amount || amount <= 0) {
+                alert('Пожалуйста, заполните все поля корректно.');
+                return;
+            }
+
+            try {
+                const response = await fetch('https://card-back-zeta.vercel.app/transfer', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fromCode: currentCardCode, toCode, amount }),
+                });
+
+                const result = await response.json();
+
+                if (result.error) {
+                    alert(result.error);
+                } else {
+                    alert('Перевод выполнен успешно!');
+                    // Обновляем баланс (можно добавить запрос к API для получения актуального баланса)
+                    const balanceElement = document.getElementById('cardBalance');
+                    const currentBalance = parseFloat(balanceElement.textContent);
+                    balanceElement.textContent = (currentBalance - amount).toFixed(2);
+                }
+            } catch (error) {
+                console.error('Ошибка:', error);
+            }
+        });
+    </script>
+</body>
+</html>
